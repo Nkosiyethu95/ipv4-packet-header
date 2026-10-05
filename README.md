@@ -1,85 +1,204 @@
-# IPv4 Packet & Header (CCNA Day 10)
+# IPv4 Packet Header — Simple Notes
 
-Study notes from **Jeremy's IT Lab** Free CCNA 200-301, Day 10 — built while learning Layer 3 with a Packet Tracer bank-branch lab.
+Plain-English study notes for **Jeremy's IT Lab** Day 10 (IPv4 header). Same fields as the video, written so they're easier to remember.
 
 **Author:** Innocent Nkosiyethu Mbatha (CCNA candidate)
 
----
-
-## What is a packet?
-
-A **packet** is a Layer 3 (Network layer) unit of data. It has two parts:
-
-1. **IP header** — control information routers use to forward the packet  
-2. **Payload** — the data being carried (usually a TCP or UDP segment, or an ICMP message)
-
-On Ethernet, that whole packet sits inside a **frame** (Layer 2): Ethernet header (MACs) → IP packet → FCS trailer.
-
-```
-Frame  = Ethernet header + IP packet + trailer
-Packet = IP header + payload
-```
-
-Routers rewrite the Ethernet header at every hop. They leave the IP header mostly alone, except they decrease **TTL** by 1.
+![IPv4 packet diagram](images/ipv4-packet-diagram.jpg)
 
 ---
 
-## IPv4 packet diagram
+## What is an IPv4 packet?
 
-![IPv4 packet = header + payload](images/ipv4-packet-diagram.jpg)
+At Layer 3, data travels as a **packet**.
 
----
+- The **header** is the "address label" routers read to forward the packet.
+- The **payload** is the real data (usually a TCP/UDP segment, or ICMP).
 
-## Why the header (and its bits) matter
-
-Every field in the IPv4 header has a **fixed size in bits**. Routers only understand the packet if those sizes are exact.
-
-| Field | Size | Why it matters |
-|-------|------|----------------|
-| Version | 4 bits | Must be `4` for IPv4 |
-| IHL | 4 bits | Header length in 32-bit words (min 5 = 20 bytes) |
-| Type of Service | 8 bits | QoS / DSCP marking |
-| Total Length | 16 bits | Entire packet size |
-| Identification / Flags / Fragment Offset | 16 + 3 + 13 bits | Fragmentation |
-| **TTL** | 8 bits | Max hops left; dropped when it hits 0 |
-| **Protocol** | 8 bits | What the payload is (ICMP, TCP, UDP…) |
-| Header Checksum | 16 bits | Header integrity |
-| **Source IP** | 32 bits | Where it came from |
-| **Destination IP** | 32 bits | Where it is going |
-| Options | variable | Rare; padded to a 32-bit boundary |
-
-The header is drawn as a grid of **32 bits per row**. If one field is a bit too short or too long, every field after it is read wrong — so Source IP, Destination IP and Protocol would land in the wrong place.
-
-Minimum header size: **20 bytes** (no options).
+You do not need to memorize every bit on day one. Learn what each field *does*.
 
 ---
 
-## Protocol field (common values)
+## Quick reminder: PDUs
 
-| Hex | Decimal | Protocol |
-|-----|---------|----------|
-| `0x01` | 1 | **ICMP** (ping, traceroute) |
-| `0x06` | 6 | **TCP** |
-| `0x11` | 17 | **UDP** |
+As data goes down the OSI stack, each layer wraps it:
 
----
+| Name | What it is |
+|------|------------|
+| **Data** | What the app sent |
+| **Segment** | Data + Layer 4 header |
+| **Packet** | Segment + Layer 3 (IP) header |
+| **Frame** | Packet + Layer 2 header + Layer 2 trailer |
 
-## How this fits Layer 3
-
-- **Routing** uses Destination IP to choose the next hop.  
-- **TTL** stops loops; traceroute works by watching TTL expire.  
-- **Protocol** tells the host which process should get the payload.  
-- On a multilayer switch or router (like the bank lab distribution switches), packets are rewritten and forwarded using this header — not the Ethernet MAC alone.
+**Packet** = the Layer 3 PDU. That is what this page is about.
 
 ---
 
-## Lab note
+## Version (4 bits)
 
-These notes go with Jeremy's Day 10 video and the bank Packet Tracer topology (SVIs, HSRP, static routes to HQ). Capture traffic in Packet Tracer Simulation mode and inspect the IPv4 header on a ping from VLAN 20 to `172.16.10.10`.
+Tells devices which IP version this is.
+
+- IPv4 → value **4**
+- IPv6 → value **6**
 
 ---
 
-## Sources
+## IHL — Internet Header Length (4 bits)
 
-- Jeremy's IT Lab — Free CCNA 200-301, Day 10 (IPv4 Header)  
-- Cisco CCNA 200-301 exam topics (Network Fundamentals / IP connectivity)
+How long the IP header is.
+
+- Measured in **4-byte chunks** (not single bytes).
+- Value **5** → 5 × 4 = **20 bytes** (normal header, no options)
+- Value **15** → 15 × 4 = **60 bytes** (maximum)
+
+**Remember:** min header = **20 bytes**, max = **60 bytes**.  
+If IHL is greater than 5, **Options** are present.
+
+---
+
+## DSCP (6 bits)
+
+A Quality of Service (QoS) hint.
+
+Routers/switches that support QoS can use this to treat some traffic (like voice or video) as higher priority.
+
+---
+
+## ECN (2 bits)
+
+Optional way to say "the path is congested" **without dropping the packet**.
+
+Needs support on both ends and along the path. If anything in the path does not support it, it may not help.
+
+---
+
+## Total Length (16 bits)
+
+Size of the **whole packet** in **bytes** (header + payload).
+
+- Not measured in 4-byte chunks (unlike IHL).
+- Practical minimum is often **20** (header only, no data).
+- Maximum is **65,535** (biggest 16-bit number).
+
+---
+
+## Identification (16 bits)
+
+Used when a packet is **fragmented** (split into pieces).
+
+All fragments from the same original packet share the **same Identification** value so the receiver can match them.
+
+---
+
+## Flags (3 bits)
+
+Controls fragmentation:
+
+| Bit | Name | Meaning |
+|-----|------|---------|
+| 0 | Reserved | Always 0 |
+| 1 | **DF** (Don't Fragment) | 1 = do **not** fragment this packet |
+| 2 | **MF** (More Fragments) | 1 = more pieces coming; 0 = this is the last piece (or not fragmented) |
+
+Unfragmented packets have MF = 0.
+
+---
+
+## Fragment Offset (13 bits)
+
+Where this fragment sits inside the original packet.
+
+That way the receiving host can rebuild the packet even if pieces arrive **out of order**.
+
+**Important:** routers may fragment; the **receiving host** reassembles.
+
+Packets get fragmented when they are bigger than the path **MTU** (Maximum Transmission Unit). On Ethernet the MTU is usually **1500 bytes**.
+
+---
+
+## TTL — Time to Live (8 bits)
+
+A **hop counter** that stops packets looping forever.
+
+- Each router that forwards the packet subtracts **1**.
+- When TTL hits **0**, the router **drops** the packet.
+
+Old design idea was "seconds of life." In practice today it means hops.
+
+---
+
+## Protocol (8 bits)
+
+Says what is **inside** the packet (the next header / payload type):
+
+| Value | Protocol |
+|------:|----------|
+| 1 | ICMP |
+| 6 | TCP |
+| 17 | UDP |
+| 89 | OSPF |
+
+Example: Protocol `1` means this packet carries ICMP (like ping).
+
+---
+
+## Header Checksum (16 bits)
+
+Error check for the **IPv4 header only**.
+
+A router recalculates the checksum. If it does not match the field → **drop the packet**.
+
+It does **not** protect the payload. TCP/UDP (and similar) have their own checksums for the data inside.
+
+---
+
+## Source IP / Destination IP (32 bits each)
+
+- **Source:** who sent the packet.
+- **Destination:** who should receive it.
+
+These are normal IPv4 addresses (e.g. `192.168.1.10`).
+
+---
+
+## Options (0–320 bits) — rare
+
+Extra optional fields at the end of the header.
+
+- Rarely used on the real Internet.
+- Present when **IHL > 5**.
+
+---
+
+## One-line cheat sheet
+
+| Field | Bits | In one line |
+|-------|-----:|-------------|
+| Version | 4 | IPv4 or IPv6? |
+| IHL | 4 | How long is the header? (×4 bytes) |
+| DSCP | 6 | QoS priority hint |
+| ECN | 2 | Congestion signal (optional) |
+| Total Length | 16 | Whole packet size in bytes |
+| Identification | 16 | ID shared by all fragments |
+| Flags | 3 | DF / MF fragmentation control |
+| Fragment Offset | 13 | Where this piece belongs |
+| TTL | 8 | Hop limit; 0 = drop |
+| Protocol | 8 | What's inside (TCP/UDP/ICMP/…) |
+| Header Checksum | 16 | Header error check only |
+| Source IP | 32 | Sender |
+| Destination IP | 32 | Receiver |
+| Options | 0–320 | Rare extras (IHL > 5) |
+
+---
+
+## Study tip
+
+Jeremy covers a lot of detail on purpose for the exam. You are not "behind" if you need a simpler pass first.
+
+1. Learn the **cheat sheet** above.
+2. Rewatch Day 10 and match each field to one line.
+3. In Packet Tracer / Wireshark, open a real packet and find Version, TTL, Protocol, and the two IPs.
+
+---
+
+*Simplified rewrite of Day 10 notebook notes for faster revision.*
